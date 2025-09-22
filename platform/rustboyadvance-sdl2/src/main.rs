@@ -209,6 +209,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 bios_bin.clone(),
                                 rom,
                                 audio_interface,
+                                None
                             )?);
                             info!("Restored!");
                         } else {
