@@ -23,6 +23,8 @@ debug = true
 [profile.release]
 opt-level = 3
 debug = false
+lto = false
+
 
 [profile.release-dev]
 inherits = "release"
