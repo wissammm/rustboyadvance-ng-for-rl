@@ -13,7 +13,7 @@ extern crate log;
 
 fn rustboyadvance_py(_py: Python, m: &PyModule) -> PyResult<()> {
     // Initialize flexi_logger
-    Logger::with_env_or_str("info") // Default log level is "info"
+    Logger::with_env_or_str("off") // Default log level is "info"
         .log_to_file() 
         .directory(".logs")      
         .duplicate_to_stderr(Duplicate::Debug) 
