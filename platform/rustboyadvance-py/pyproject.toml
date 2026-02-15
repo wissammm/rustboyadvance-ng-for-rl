@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "rustboyadvance-py"
 version = "0.1.0"
 description = "Python bindings for RustBoyAdvance"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 
 [tool.maturin]
-features = ["elf_support"]
+features = ["elf_support", "fast_forward"]

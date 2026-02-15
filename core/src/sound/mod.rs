@@ -298,18 +298,26 @@ impl SoundController {
         timer_id: usize,
         _num_overflows: usize,
     ) {
-        if !self.mse {
+        #[cfg(feature = "no_audio")]
+        {
             return;
         }
+        
+        #[cfg(not(feature = "no_audio"))]
+        {
+            if !self.mse {
+                return;
+            }
 
-        static FIFO_INDEX_TO_REG: [u32; 2] = [REG_FIFO_A, REG_FIFO_B];
-        for (fifo, reg) in FIFO_INDEX_TO_REG.iter().enumerate() {
-            let dma = &mut self.dma_sound[fifo];
+            static FIFO_INDEX_TO_REG: [u32; 2] = [REG_FIFO_A, REG_FIFO_B];
+            for (fifo, reg) in FIFO_INDEX_TO_REG.iter().enumerate() {
+                let dma = &mut self.dma_sound[fifo];
 
-            if timer_id == dma.timer_select {
-                dma.value = dma.fifo.read();
-                if dma.fifo.count() <= 16 {
-                    dmac.notify_sound_fifo(*reg);
+                if timer_id == dma.timer_select {
+                    dma.value = dma.fifo.read();
+                    if dma.fifo.count() <= 16 {
+                        dmac.notify_sound_fifo(*reg);
+                    }
                 }
             }
         }
@@ -317,30 +325,38 @@ impl SoundController {
 
     #[inline]
     fn on_sample(&mut self, audio_device: &mut DynAudioInterface) -> FutureEvent {
-        let mut sample = [0f32, 0f32];
+        #[cfg(feature = "no_audio")]
+        {
+            return (EventType::Apu(ApuEvent::Sample), self.cycles_per_sample);
+        }
+        
+        #[cfg(not(feature = "no_audio"))]
+        {
+            let mut sample = [0f32, 0f32];
 
-        for (channel, out_sample) in sample.iter_mut().enumerate() {
-            let mut dma_sample = 0;
-            for dma in &mut self.dma_sound {
-                if dma.is_stereo_channel_enabled(channel) {
-                    let value = dma.value as i16;
-                    dma_sample += value * (2 << dma.volume_shift);
+            for (channel, out_sample) in sample.iter_mut().enumerate() {
+                let mut dma_sample = 0;
+                for dma in &mut self.dma_sound {
+                    if dma.is_stereo_channel_enabled(channel) {
+                        let value = dma.value as i16;
+                        dma_sample += value * (2 << dma.volume_shift);
+                    }
                 }
+
+                apply_bias(&mut dma_sample, self.sound_bias.bit_range(0..10) as i16);
+                *out_sample = dma_sample as i32 as f32;
             }
 
-            apply_bias(&mut dma_sample, self.sound_bias.bit_range(0..10) as i16);
-            *out_sample = dma_sample as i32 as f32;
+            self.resampler.feed(&sample, &mut self.output_buffer);
+
+            self.output_buffer.drain(..).for_each(|[left, right]| {
+                audio_device.push_sample(&[
+                    (left.round() as i16) * (std::i16::MAX / 512),
+                    (right.round() as i16) * (std::i16::MAX / 512),
+                ]);
+            });
+            (EventType::Apu(ApuEvent::Sample), self.cycles_per_sample)
         }
-
-        self.resampler.feed(&sample, &mut self.output_buffer);
-
-        self.output_buffer.drain(..).for_each(|[left, right]| {
-            audio_device.push_sample(&[
-                (left.round() as i16) * (std::i16::MAX / 512),
-                (right.round() as i16) * (std::i16::MAX / 512),
-            ]);
-        });
-        (EventType::Apu(ApuEvent::Sample), self.cycles_per_sample)
     }
 
     pub fn on_event(
@@ -359,7 +375,6 @@ impl SoundController {
 fn apply_bias(sample: &mut i16, level: i16) {
     let mut s = *sample;
     s += level;
-    // clamp
     if s > 0x3ff {
         s = 0x3ff;
     } else if s < 0 {

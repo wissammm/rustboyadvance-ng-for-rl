@@ -265,70 +265,85 @@ impl Gpu {
     }
 
     pub fn render_scanline(&mut self) {
-        if self.dispcnt.force_blank {
-            for x in self.frame_buffer[self.vcount * DISPLAY_WIDTH..]
-                .iter_mut()
-                .take(DISPLAY_WIDTH)
-            {
-                *x = 0xf8f8f8;
-            }
+        #[cfg(feature = "headless")]
+        {
             return;
         }
+        
+        #[cfg(not(feature = "headless"))]
+        {
+            if self.dispcnt.force_blank {
+                for x in self.frame_buffer[self.vcount * DISPLAY_WIDTH..]
+                    .iter_mut()
+                    .take(DISPLAY_WIDTH)
+                {
+                    *x = 0xf8f8f8;
+                }
+                return;
+            }
 
-        if self.dispcnt.enable_obj {
-            self.render_objs();
-        }
-        match self.dispcnt.mode {
-            0 => {
-                for bg in 0..=3 {
-                    if self.dispcnt.enable_bg[bg] {
-                        self.render_reg_bg(bg);
+            if self.dispcnt.enable_obj {
+                self.render_objs();
+            }
+            match self.dispcnt.mode {
+                0 => {
+                    for bg in 0..=3 {
+                        if self.dispcnt.enable_bg[bg] {
+                            self.render_reg_bg(bg);
+                        }
                     }
+                    self.finalize_scanline(0, 3);
                 }
-                self.finalize_scanline(0, 3);
-            }
-            1 => {
-                if self.dispcnt.enable_bg[2] {
-                    self.render_aff_bg(2);
+                1 => {
+                    if self.dispcnt.enable_bg[2] {
+                        self.render_aff_bg(2);
+                    }
+                    if self.dispcnt.enable_bg[1] {
+                        self.render_reg_bg(1);
+                    }
+                    if self.dispcnt.enable_bg[0] {
+                        self.render_reg_bg(0);
+                    }
+                    self.finalize_scanline(0, 2);
                 }
-                if self.dispcnt.enable_bg[1] {
-                    self.render_reg_bg(1);
+                2 => {
+                    if self.dispcnt.enable_bg[3] {
+                        self.render_aff_bg(3);
+                    }
+                    if self.dispcnt.enable_bg[2] {
+                        self.render_aff_bg(2);
+                    }
+                    self.finalize_scanline(2, 3);
                 }
-                if self.dispcnt.enable_bg[0] {
-                    self.render_reg_bg(0);
+                3 => {
+                    self.render_mode3(2);
+                    self.finalize_scanline(2, 2);
                 }
-                self.finalize_scanline(0, 2);
-            }
-            2 => {
-                if self.dispcnt.enable_bg[3] {
-                    self.render_aff_bg(3);
+                4 => {
+                    self.render_mode4(2);
+                    self.finalize_scanline(2, 2);
                 }
-                if self.dispcnt.enable_bg[2] {
-                    self.render_aff_bg(2);
+                5 => {
+                    self.render_mode5(2);
+                    self.finalize_scanline(2, 2);
                 }
-                self.finalize_scanline(2, 3);
+                _ => panic!("{:?} not supported", self.dispcnt.mode),
             }
-            3 => {
-                self.render_mode3(2);
-                self.finalize_scanline(2, 2);
-            }
-            4 => {
-                self.render_mode4(2);
-                self.finalize_scanline(2, 2);
-            }
-            5 => {
-                self.render_mode5(2);
-                self.finalize_scanline(2, 2);
-            }
-            _ => panic!("{:?} not supported", self.dispcnt.mode),
+            // self.mosaic_sfx();
         }
-        // self.mosaic_sfx();
     }
 
-    /// Clears the gpu obj buffer
     pub fn obj_buffer_reset(&mut self) {
-        for x in self.obj_buffer.iter_mut() {
-            *x = Default::default();
+        #[cfg(feature = "headless")]
+        {
+            return;
+        }
+        
+        #[cfg(not(feature = "headless"))]
+        {
+            for x in self.obj_buffer.iter_mut() {
+                *x = Default::default();
+            }
         }
     }
 
